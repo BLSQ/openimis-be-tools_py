@@ -1,7 +1,10 @@
+import datetime
 import logging
 import os
 import tempfile
 import xml.etree.ElementTree as ET
+
+from django.apps import apps
 
 from core.models import Officer
 from core.utils import filter_validity
@@ -14,6 +17,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 from import_export.resources import ModelResource
 from tablib import Dataset
+import pandas as pd
 
 from location.models import HealthFacility, Location
 from medical.models import Diagnosis, Item, Service
@@ -707,3 +711,102 @@ def process_import_items_services(resource: ModelResource, dataset: Dataset):
 
     logger.info("End of import process")
     return return_upload_result_json(success=success, other_types_result=result, other_types_errors=errors)
+
+
+@api_view(["GET"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_spimm_perms,
+        )
+    ]
+)
+def export_spimm(request):
+    export_format = request.GET.get("file_format", "unknown")
+    if export_format == XLSX:
+        return _process_export_spimm()
+    else:
+        return JsonResponse({"error": "Unknown export format."}, status=400)
+
+
+def _process_export_spimm():
+
+    Claim = apps.get_model("claim", "Claim")
+    claim_filters = Q(validity_to__isnull=True) & ~Q(status=1)
+    claims = (Claim.objects.filter(claim_filters)
+                           .prefetch_related("health_facility")
+                           .prefetch_related("health_facility__location")
+                           .prefetch_related("insuree")
+                           .prefetch_related("insuree__family")
+                           .prefetch_related("services")
+              )
+
+    data = []
+    for claim in claims:
+        family_location = claim.insuree.family.location
+        # main_service = determine_main_service(claim.services)
+        main_service = {
+            "code": "",
+            "type": "",
+            "justification": "",
+        }
+
+        new_data_line = {
+            "Name of Health Facility": claim.health_facility.name,
+            "Type of Health Facility": claim.health_facility.legal_form.legal_form,
+            "Township of Health Facility": f"{claim.health_facility.location.code} - {claim.health_facility.location.name}",  # TODO: have township level on HFs (MGO2-48)
+            "Claim Code": claim.code,
+            "Reporting Month": claim.date_claimed.strftime("%B"),
+            "Reporting Year": claim.date_claimed.year,
+            "Reporting Date": claim.date_claimed,
+            "Patient Name": claim.insuree.last_name,
+            "Patient ID": claim.insuree.chf_id,
+            "Patient Age (Year)": claim.insuree.json_ext.get("year", None) if claim.insuree.json_ext else None,  # TODO: have the age fields stored in json_ext
+            "Patient Age (Month)": claim.insuree.json_ext.get("month", None) if claim.insuree.json_ext else None,  # TODO: have the age fields stored in json_ext
+            "Patient Age (Days)": claim.insuree.json_ext.get("day", None) if claim.insuree.json_ext else None,  # TODO: have the age fields stored in json_ext
+            "Patient Gender": claim.insuree.gender.gender,
+            "Patient Phone Number": claim.insuree.phone,
+            "Patient Address (House number and street name)": claim.insuree.family.address,
+            "Patient Address (Camp/Village/Ward)": f"{family_location.code} - {family_location.name}",
+            "Patient Address (Township)": f"{family_location.parent.code} - {family_location.parent.name}",
+            "Type of Emergency Support": main_service["type"],  # TODO: have somewhere the information of emergency type in Service (MGO2-49)
+            "Discharge Diagnosis": claim.json_ext["dischargeDiagnosis"] if claim.json_ext else None,
+            "Date of Admission": claim.date_from,
+            "Date of Discharge": claim.date_to,
+            "Service Package Utilized - Code": main_service["code"],  # TODO: prepare a way to fetch the "main" service of a claim
+            "Maternal Death": claim.json_ext["maternalDeath"] if claim.json_ext else None,
+            "Child Death": claim.json_ext["childDeath"] if claim.json_ext else None,
+            "Rural Household": claim.insuree.json_ext["rural"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
+            "Internally Displaced Person (IDP)": claim.insuree.json_ext["idp"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
+            "Disability": claim.insuree.json_ext["disability"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
+            "Vulnerable Household": claim.insuree.json_ext["vulnerable"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
+            "Remarks": claim.explanation,
+            "Verified": _transform_claim_status_to_text(Claim, claim.status),
+            "Comments by Purchasing Agency": main_service["justification"],  # TODO: prepare a way to fetch the "main" service of a claim
+        }
+        data.append(new_data_line)
+
+    df = pd.DataFrame(data=data)
+
+    now = datetime.datetime.now()
+    timestamp = datetime.datetime.strftime(now, "%Y-%m-%d_%H%M%S")
+    filename = f"export-spimm-{timestamp}.xlsx"
+    response = HttpResponse(content_type=CONTENT_TYPES[XLSX])
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+    with pd.ExcelWriter(response) as writer:
+        df.to_excel(writer, index=False)
+
+    return response
+
+
+def _transform_claim_status_to_text(claim_model, status: int):
+    if status == claim_model.STATUS_ENTERED:
+        return "Entered"
+    elif status == claim_model.STATUS_CHECKED:
+        return "Checked"
+    elif status == claim_model.STATUS_PROCESSED:
+        return "Processed"
+    elif status == claim_model.STATUS_VALUATED:
+        return "Valuated"
+    return "Unknown"
