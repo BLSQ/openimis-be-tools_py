@@ -750,6 +750,7 @@ def _process_export_spimm():
             "type": "",
             "justification": "",
         }
+        patient_age = _determine_patient_age(claim.insuree)
 
         new_data_line = {
             "Name of Health Facility": claim.health_facility.name,
@@ -761,9 +762,9 @@ def _process_export_spimm():
             "Reporting Date": claim.date_claimed,
             "Patient Name": claim.insuree.last_name,
             "Patient ID": claim.insuree.chf_id,
-            "Patient Age (Year)": claim.insuree.json_ext.get("year", None) if claim.insuree.json_ext else None,  # TODO: have the age fields stored in json_ext
-            "Patient Age (Month)": claim.insuree.json_ext.get("month", None) if claim.insuree.json_ext else None,  # TODO: have the age fields stored in json_ext
-            "Patient Age (Days)": claim.insuree.json_ext.get("day", None) if claim.insuree.json_ext else None,  # TODO: have the age fields stored in json_ext
+            "Patient Age (Year)": patient_age["years"],
+            "Patient Age (Month)": patient_age["months"],
+            "Patient Age (Days)": patient_age["days"],
             "Patient Gender": claim.insuree.gender.gender,
             "Patient Phone Number": claim.insuree.phone,
             "Patient Address (House number and street name)": claim.insuree.family.address,
@@ -810,3 +811,29 @@ def _transform_claim_status_to_text(claim_model, status: int):
     elif status == claim_model.STATUS_VALUATED:
         return "Valuated"
     return "Unknown"
+
+
+def _determine_patient_age(insuree):
+    days = None
+    months = None
+    years = None
+
+    json_ext = insuree.json_ext
+    if "ageDays" in json_ext and json_ext["ageDays"] is not None:
+        days = json_ext["ageDays"]
+    if "ageMonths" in json_ext and json_ext["ageMonths"] is not None:
+        months = json_ext["ageMonths"]
+    if "ageYears" in json_ext and json_ext["ageYears"] is not None:
+        years = json_ext["ageYears"]
+
+    if all(period is None for period in [days, months, years]):
+        today = datetime.date.today()
+        dob = insuree.dob
+        # from https://stackoverflow.com/a/9754466
+        years = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+    return {
+        "years": years,
+        "months": months,
+        "days": days,
+    }
