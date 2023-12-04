@@ -729,9 +729,19 @@ def export_spimm(request):
         return JsonResponse({"error": "Unknown export format."}, status=400)
 
 
+SPIMM_CLAIM_JSON_KEYS = [
+    "dischargeDiagnosis",
+    "maternalDeath",
+    "childDeath",
+    "rural",
+    "idp",
+    "disability",
+    "vulnerable",
+]
 def _process_export_spimm():
 
     Claim = apps.get_model("claim", "Claim")
+    Service = apps.get_model("medical", "Service")
     claim_filters = Q(validity_to__isnull=True) & ~Q(status=1)
     claims = (Claim.objects.filter(claim_filters)
                            .prefetch_related("health_facility")
@@ -744,18 +754,14 @@ def _process_export_spimm():
     data = []
     for claim in claims:
         family_location = claim.insuree.family.location
-        # main_service = determine_main_service(claim.services)
-        main_service = {
-            "code": "",
-            "type": "",
-            "justification": "",
-        }
+        main_service = _determine_main_service(claim.services, Service)
         patient_age = _determine_patient_age(claim.insuree)
+        claim_json_ext_data = _format_claim_json_data(claim.json_ext)
 
         new_data_line = {
             "Name of Health Facility": claim.health_facility.name,
             "Type of Health Facility": claim.health_facility.legal_form.legal_form,
-            "Township of Health Facility": f"{claim.health_facility.location.code} - {claim.health_facility.location.name}",  # TODO: have township level on HFs (MGO2-48)
+            "Township of Health Facility": _determine_hf_township(claim.health_facility),
             "Claim Code": claim.code,
             "Reporting Month": claim.date_claimed.strftime("%B"),
             "Reporting Year": claim.date_claimed.year,
@@ -770,20 +776,21 @@ def _process_export_spimm():
             "Patient Address (House number and street name)": claim.insuree.family.address,
             "Patient Address (Camp/Village/Ward)": f"{family_location.code} - {family_location.name}",
             "Patient Address (Township)": f"{family_location.parent.code} - {family_location.parent.name}",
-            "Type of Emergency Support": main_service["type"],  # TODO: have somewhere the information of emergency type in Service (MGO2-49)
-            "Discharge Diagnosis": claim.json_ext["dischargeDiagnosis"] if claim.json_ext else None,
+            "Type of Emergency Support": main_service["type"],
+            "Discharge Diagnosis": claim_json_ext_data["dischargeDiagnosis"],
             "Date of Admission": claim.date_from,
             "Date of Discharge": claim.date_to,
-            "Service Package Utilized - Code": main_service["code"],  # TODO: prepare a way to fetch the "main" service of a claim
-            "Maternal Death": claim.json_ext["maternalDeath"] if claim.json_ext else None,
-            "Child Death": claim.json_ext["childDeath"] if claim.json_ext else None,
-            "Rural Household": claim.insuree.json_ext["rural"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
-            "Internally Displaced Person (IDP)": claim.insuree.json_ext["idp"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
-            "Disability": claim.insuree.json_ext["disability"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
-            "Vulnerable Household": claim.insuree.json_ext["vulnerable"] if claim.insuree.json_ext else None,  # TODO: move this information from Insuree to Claim (MGO2-54)
-            "Remarks": claim.explanation,
+            "Service Package Utilized - Code": main_service["code"],
+            "Maternal Death": claim_json_ext_data["maternalDeath"],
+            "Child Death": claim_json_ext_data["childDeath"],
+            "Rural Household": claim_json_ext_data["rural"],
+            "Internally Displaced Person (IDP)": claim_json_ext_data["idp"],
+            "Disability": claim_json_ext_data["disability"],
+            "Vulnerable Household": claim_json_ext_data["vulnerable"],
+            "Remarks - Claim level": claim.explanation,
+            "Remarks - Service level": main_service["explanation"],
             "Verified": _transform_claim_status_to_text(Claim, claim.status),
-            "Comments by Purchasing Agency": main_service["justification"],  # TODO: prepare a way to fetch the "main" service of a claim
+            "Comments by Purchasing Agency": main_service["justification"],
         }
         data.append(new_data_line)
 
@@ -837,3 +844,54 @@ def _determine_patient_age(insuree):
         "months": months,
         "days": days,
     }
+
+
+def _determine_main_service(claim_services, service_model):
+    main_service = {
+        "type": None,
+        "code": None,
+        "justification": None,
+        "explanation": None,
+    }
+
+    for service in claim_services.all():
+        json_ext = service.service.json_ext
+        if not json_ext or not "spimmCategory" in json_ext:
+            return main_service
+        spimm_category = json_ext["spimmCategory"]
+        if (spimm_category == service_model.SPIMM_CATEGORY_EMOC
+                or spimm_category == service_model.SPIMM_CATEGORY_ECC):
+            main_service["type"] = spimm_category
+            main_service["code"] = service.service.code
+            main_service["explanation"] = service.explanation
+            main_service["justification"] = service.justification
+            return main_service
+
+    return main_service
+
+
+def _determine_hf_township(hf):
+    if not hf.json_ext or "ward" not in hf.json_ext:
+        return None
+    ward = hf.json_ext["ward"]
+    if "code" not in ward or "name" not in ward:
+        return None
+    township = f"{ward['code']} - {ward['name']}"
+    return township
+
+
+def _format_claim_json_data(json: dict):
+    data = {
+        "dischargeDiagnosis": None,
+        "maternalDeath": None,
+        "childDeath": None,
+        "rural": None,
+        "idp": None,
+        "disability": None,
+        "vulnerable": None,
+    }
+    if not json:
+        return data
+    for key in SPIMM_CLAIM_JSON_KEYS:
+        data[key] = json[key] if key in json else None
+    return data
