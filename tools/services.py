@@ -1646,8 +1646,8 @@ def upload_feedbacks(archive, user):
 def validate_imported_item_row(row):
     # TODO : refactor this function and the code used in validating XML uploads
     categories = [row["adult_cat"], row["minor_cat"], row["male_cat"], row["female_cat"]]
-    if len(row["code"]) < 1 or len(row["code"]) > 6:
-        raise ValidationError(f"Item '{row['code']}': code is invalid. Must be between 1 and 6 characters")
+    if len(row["code"]) < 1 or len(row["code"]) > ItemOrService.CODE_LENGTH:
+        raise ValidationError(f"Item '{row['code']}': code is invalid. Must be between 1 and {ItemOrService.CODE_LENGTH} characters")
     elif len(row["name"]) < 1 or len(row["name"]) > 100:
         raise ValidationError(f"Item '{row['code']}': name is invalid. Must be between 1 and 100 characters")
     elif row["type"] not in Item.TYPE_VALUES:
@@ -1664,8 +1664,8 @@ def validate_imported_item_row(row):
 def validate_imported_service_row(row):
     # TODO : refactor this function and the code used in validating XML uploads
     categories = [row["adult_cat"], row["minor_cat"], row["male_cat"], row["female_cat"]]
-    if len(row["code"]) < 1 or len(row["code"]) > 6:
-        raise ValidationError(f"Service '{row['code']}': code is invalid. Must be between 1 and 6 characters")
+    if len(row["code"]) < 1 or len(row["code"]) > ItemOrService.CODE_LENGTH:
+        raise ValidationError(f"Service '{row['code']}': code is invalid. Must be between 1 and {ItemOrService.CODE_LENGTH} characters")
     elif len(row["name"]) < 1 or len(row["name"]) > 100:
         raise ValidationError(f"Service '{row['code']}': name is invalid. Must be between 1 and 100 characters")
     elif row["type"] not in Service.TYPE_VALUES:
