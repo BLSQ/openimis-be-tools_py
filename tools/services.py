@@ -1648,8 +1648,8 @@ def validate_imported_item_row(row):
     categories = [row["adult_cat"], row["minor_cat"], row["male_cat"], row["female_cat"]]
     if len(row["code"]) < 1 or len(row["code"]) > ItemOrService.CODE_LENGTH:
         raise ValidationError(f"Item '{row['code']}': code is invalid. Must be between 1 and {ItemOrService.CODE_LENGTH} characters")
-    elif len(row["name"]) < 1 or len(row["name"]) > 100:
-        raise ValidationError(f"Item '{row['code']}': name is invalid. Must be between 1 and 100 characters")
+    elif len(row["name"]) < 1 or len(row["name"]) > ItemOrService.NAME_LENGTH:
+        raise ValidationError(f"Item '{row['code']}': name is invalid. Must be between 1 and {ItemOrService.NAME_LENGTH} characters")
     elif row["type"] not in Item.TYPE_VALUES:
         raise ValidationError(f"Item '{row['code']}': type is invalid. Must be one of the following: {Item.TYPE_VALUES}")
     elif row["care_type"] not in ItemOrService.CARE_TYPE_VALUES:
@@ -1666,8 +1666,8 @@ def validate_imported_service_row(row):
     categories = [row["adult_cat"], row["minor_cat"], row["male_cat"], row["female_cat"]]
     if len(row["code"]) < 1 or len(row["code"]) > ItemOrService.CODE_LENGTH:
         raise ValidationError(f"Service '{row['code']}': code is invalid. Must be between 1 and {ItemOrService.CODE_LENGTH} characters")
-    elif len(row["name"]) < 1 or len(row["name"]) > 100:
-        raise ValidationError(f"Service '{row['code']}': name is invalid. Must be between 1 and 100 characters")
+    elif len(row["name"]) < 1 or len(row["name"]) > ItemOrService.NAME_LENGTH:
+        raise ValidationError(f"Service '{row['code']}': name is invalid. Must be between 1 and {ItemOrService.NAME_LENGTH} characters")
     elif row["type"] not in Service.TYPE_VALUES:
         raise ValidationError(f"Service '{row['code']}': type is invalid. Must be one of the following: {Service.TYPE_VALUES}")
     elif row["level"] not in Service.LEVEL_VALUES:
