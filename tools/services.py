@@ -1658,6 +1658,8 @@ def validate_imported_item_row(row):
         raise ValidationError(f"Item '{row['code']}': patient categories are invalid. Must be one of the following: [0, 1]")
     elif "package" in row and (row["package"] is not None) and len(row["package"]) > 255:
         raise ValidationError(f"Item '{row['code']}': package is invalid. Must be maximum 255 characters")
+    elif "nhia_code" in row and (row["nhia_code"] is not None) and len(row["nhia_code"]) > ItemOrService.CODE_LENGTH:
+        raise ValidationError(f"Item '{row['code']}': nhia_code is invalid. Must be maximum {ItemOrService.CODE_LENGTH} characters")
     return
 
 

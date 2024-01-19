@@ -101,7 +101,7 @@ class ItemResource(ItemServiceResource):
         model = Item
 
         # These are the fields that are going to get exported/
-        fields = ('code', 'name', 'type', 'package', 'price', 'quantity',
+        fields = ('code', 'name', 'nhia_code', 'type', 'package', 'price', 'quantity',
                   'care_type', 'frequency', 'patient_category')
 
         # You can customize the order for exports, but this order is also used during upload
