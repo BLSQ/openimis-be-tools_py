@@ -23,6 +23,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from . import serializers, services, utils
 from .apps import ToolsConfig
+from .constants import SUPPORTED_FORMATS, XLS, CSV, JSON, XLSX, CONTENT_TYPES
+from .data_transfers.indigents import process_export_indigents, process_import_indigents
 from .resources import ItemResource, ServiceResource
 from .services import return_upload_result_json
 
@@ -549,21 +551,6 @@ def _process_upload(request, process_method):
     return JsonResponse({"success": len(errors) == 0, "errors": errors})
 
 
-# List of supported import/export formats so far
-XLS = "xls"
-XLSX = "xlsx"
-CSV = "csv"
-JSON = "json"
-SUPPORTED_FORMATS = [XLS, XLSX, CSV, JSON]
-
-# other types: https://stackoverflow.com/a/50860387
-CONTENT_TYPES = {
-    XLS: "application/vnd.ms-excel",
-    CSV: "text/csv",
-    JSON: "application/json",
-    XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-}
-
 
 @api_view(["GET"])
 @permission_classes(
@@ -707,3 +694,41 @@ def process_import_items_services(resource: ModelResource, dataset: Dataset):
 
     logger.info("End of import process")
     return return_upload_result_json(success=success, other_types_result=result, other_types_errors=errors)
+
+
+@api_view(["GET"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_indigents_perms,
+        )
+    ]
+)
+def export_indigents(request):
+    export_format = request.GET.get("file_format", "unknown")
+    if export_format == XLSX:
+        return process_export_indigents(request.user.id_for_audit)
+    else:
+        return JsonResponse({"error": "Unknown export format - can only process xlsx files."}, status=400)
+
+
+@api_view(["POST"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_indigents_perms,
+        )
+    ]
+)
+def import_indigents(request):
+    serializer = serializers.FileSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    file = serializer.validated_data.get("file")
+    user_id = request.user.id_for_audit
+    logger.info("User (audit id %s) requested import of indigents", user_id)
+
+    if file.content_type != CONTENT_TYPES[XLSX]:
+        return JsonResponse({"error": "Unknown import format - can only process xlsx files."}, status=400)
+
+    return process_import_indigents(file, user_id)

@@ -19,6 +19,8 @@ urlpatterns = [
     path("imports/items", views.import_items),
     path("exports/services", views.export_services),
     path("imports/services", views.import_services),
+    path("exports/indigents", views.export_indigents),
+    path("imports/indigents", views.import_indigents),
     path("extracts/download_master_data", csrf_exempt(views.download_master_data)),
     path("extracts/download_phone_extract", views.download_phone_extract),
     path("extracts/download_renewals", csrf_exempt(views.download_renewals)),
