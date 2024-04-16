@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from . import serializers, services, utils
 from .apps import ToolsConfig
 from .constants import SUPPORTED_FORMATS, XLS, CSV, JSON, XLSX, CONTENT_TYPES
+from .data_transfers.formal_sector import process_export_formal_sector, process_import_formal_sector
 from .data_transfers.indigents import process_export_indigents, process_import_indigents
 from .resources import ItemResource, ServiceResource
 from .services import return_upload_result_json
@@ -707,7 +708,9 @@ def process_import_items_services(resource: ModelResource, dataset: Dataset):
 def export_indigents(request):
     export_format = request.GET.get("file_format", "unknown")
     if export_format == XLSX:
-        return process_export_indigents(request.user.id_for_audit)
+        user_id = request.user.id_for_audit
+        logger.info("User (audit id %s) requested export of indigents", user_id)
+        return process_export_indigents(user_id)
     else:
         return JsonResponse({"error": "Unknown export format - can only process xlsx files."}, status=400)
 
@@ -732,3 +735,43 @@ def import_indigents(request):
         return JsonResponse({"error": "Unknown import format - can only process xlsx files."}, status=400)
 
     return process_import_indigents(file, user_id)
+
+
+@api_view(["GET"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_formal_sector_perms,
+        )
+    ]
+)
+def export_formal_sector(request):
+    export_format = request.GET.get("file_format", "unknown")
+    if export_format == XLSX:
+        user_id = request.user.id_for_audit
+        logger.info("User (audit id %s) requested export of formal sector", user_id)
+        return process_export_formal_sector(user_id)
+    else:
+        return JsonResponse({"error": "Unknown export format - can only process xlsx files."}, status=400)
+
+
+@api_view(["POST"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_formal_sector_perms,
+        )
+    ]
+)
+def import_formal_sector(request):
+    serializer = serializers.FileSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    file = serializer.validated_data.get("file")
+    user_id = request.user.id_for_audit
+    logger.info("User (audit id %s) requested import of formal sector", user_id)
+
+    if file.content_type != CONTENT_TYPES[XLSX]:
+        return JsonResponse({"error": "Unknown import format - can only process xlsx files."}, status=400)
+
+    return process_import_formal_sector(file, user_id)

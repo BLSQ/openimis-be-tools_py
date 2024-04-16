@@ -8,6 +8,7 @@ from django.http import HttpResponse, JsonResponse
 
 from autoenroll.services import autoenroll_family
 from tools.constants import CONTENT_TYPES, XLSX
+from tools.utils import convert_pandas_empty_values_to_none
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +46,10 @@ def process_export_indigents(user_id):
     return response
 
 
-def _convert_empty_values_to_none(value):
-    if pd.isna(value):
-        return None
-    return bool(value)
-
-
 def process_import_indigents(file, user_id):
     column_mapping = {
         HEADER_NIN: int,
-        HEADER_NO_LONGER_INDIGENT: _convert_empty_values_to_none
+        HEADER_NO_LONGER_INDIGENT: convert_pandas_empty_values_to_none
     }
     df = pd.read_excel(file, engine='openpyxl', converters=column_mapping)
     new_column_names = {
@@ -115,7 +110,6 @@ def process_import_indigents(file, user_id):
                     continue
 
     success = len(errors) != total_sent
-    # success = True
     response_data = {
         "data": {
             "sent": total_sent,
