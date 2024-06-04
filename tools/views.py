@@ -24,8 +24,11 @@ from rest_framework.response import Response
 from . import serializers, services, utils
 from .apps import ToolsConfig
 from .constants import SUPPORTED_FORMATS, XLS, CSV, JSON, XLSX, CONTENT_TYPES
+from .data_transfers.diagnoses import process_export_diagnoses
 from .data_transfers.formal_sector import process_export_formal_sector, process_import_formal_sector
+from .data_transfers.health_facilities import process_export_health_facilities
 from .data_transfers.indigents import process_export_indigents, process_import_indigents
+from .data_transfers.locations import process_export_locations
 from .resources import ItemResource, ServiceResource
 from .services import return_upload_result_json
 
@@ -775,3 +778,57 @@ def import_formal_sector(request):
         return JsonResponse({"error": "Unknown import format - can only process xlsx files."}, status=400)
 
     return process_import_formal_sector(file, user_id)
+
+
+@api_view(["GET"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_diagnoses_perms,
+        )
+    ]
+)
+def export_diagnoses(request):
+    export_format = request.GET.get("file_format", "unknown")
+    if export_format == XLSX:
+        user_id = request.user.id_for_audit
+        logger.info("User (audit id %s) requested XLSX export of diagnoses", user_id)
+        return process_export_diagnoses(user_id)
+    else:
+        return JsonResponse({"error": "Unknown export format - can only process xlsx files."}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_locations_perms,
+        )
+    ]
+)
+def export_locations(request):
+    export_format = request.GET.get("file_format", "unknown")
+    if export_format == XLSX:
+        user_id = request.user.id_for_audit
+        logger.info("User (audit id %s) requested XLSX export of locations", user_id)
+        return process_export_locations(user_id)
+    else:
+        return JsonResponse({"error": "Unknown export format - can only process xlsx files."}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes(
+    [
+        checkUserWithRights(
+            ToolsConfig.registers_health_facilities_perms,
+        )
+    ]
+)
+def export_health_facilities(request):
+    export_format = request.GET.get("file_format", "unknown")
+    if export_format == XLSX:
+        user_id = request.user.id_for_audit
+        logger.info("User (audit id %s) requested XLSX export of health facilities", user_id)
+        return process_export_health_facilities(user_id)
+    else:
+        return JsonResponse({"error": "Unknown export format - can only process xlsx files."}, status=400)
