@@ -23,7 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from . import serializers, services, utils
 from .apps import ToolsConfig
-from .constants import SUPPORTED_FORMATS, XLS, CSV, JSON, XLSX, CONTENT_TYPES
+from .constants import SUPPORTED_FORMATS, CSV, JSON, XLSX, CONTENT_TYPES
 from .data_transfers.diagnoses import process_export_diagnoses
 from .data_transfers.formal_sector import process_export_formal_sector, process_import_formal_sector
 from .data_transfers.health_facilities import process_export_health_facilities
@@ -577,13 +577,8 @@ def process_export_items(user_id, data_type):
     item_resource = ItemResource(user_id)
     query_set = Item.objects.filter(*filter_validity()).order_by("code")
     dataset = item_resource.export(query_set)
-    datasets = {
-        XLS: dataset.xls,
-        CSV: dataset.csv,
-        JSON: dataset.json,
-        XLSX: dataset.xlsx,
-    }
-    response = HttpResponse(datasets[data_type], content_type=CONTENT_TYPES[data_type])
+    result = dataset.export(data_type)
+    response = HttpResponse(result, content_type=CONTENT_TYPES[data_type])
     response['Content-Disposition'] = f'attachment; filename="items.{data_type}"'
     return response
 
@@ -636,13 +631,8 @@ def process_export_services(user_id, data_type):
     service_resource = ServiceResource(user_id)
     query_set = Service.objects.filter(*filter_validity()).order_by("code")
     dataset = service_resource.export(query_set)
-    datasets = {
-        XLS: dataset.xls,
-        CSV: dataset.csv,
-        JSON: dataset.json,
-        XLSX: dataset.xlsx,
-    }
-    response = HttpResponse(datasets[data_type], content_type=CONTENT_TYPES[data_type])
+    result = dataset.export(data_type)
+    response = HttpResponse(result, content_type=CONTENT_TYPES[data_type])
     response['Content-Disposition'] = f'attachment; filename="services.{data_type}"'
     return response
 
